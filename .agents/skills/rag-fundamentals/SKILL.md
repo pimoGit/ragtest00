@@ -19,12 +19,16 @@ Aiutare a realizzare, un passo alla volta, un'applicazione didattica per capire 
 
 Conservare metadati sufficienti per risalire al documento originale. Evitare di confondere la similarità semantica con una ricerca per corrispondenza letterale.
 
+## Modello di embedding scelto
+
+Per questo progetto usare il modello esterno `gemini-embedding-001` tramite Gemini API. Per il recupero, codificare i documenti con `RETRIEVAL_DOCUMENT` e le query con `RETRIEVAL_QUERY`. Le chiamate API richiedono una chiave; non inserirla nel codice o nel repository. Il tier gratuito può usare i contenuti inviati per migliorare i prodotti Google: durante gli esperimenti usare solo documenti non sensibili.
+
 ## Approccio didattico e vincoli
 
 - Implementare soltanto il requisito del passo richiesto; non costruire in anticipo il flusso RAG completo.
 - Preferire funzioni e script Python semplici, con responsabilità chiare e facili da seguire.
 - Per ogni passo, chiarire brevemente input, output e ruolo nel flusso.
 - Non aggiungere frontend, API, framework o infrastruttura non richiesti.
-- Provider di embedding, database vettoriale, formati dei file, strategia di chunking e gestione delle credenziali sono scelte da concordare quando diventano necessarie; non inventare scelte o credenziali.
+- Non assumere scelte per database vettoriale, formati dei file, strategia di chunking o gestione delle credenziali senza una richiesta o una decisione esplicita.
 - Gestire gli errori in modo esplicito, soprattutto per cartelle inesistenti, file non leggibili e dipendenze/configurazioni mancanti.
 - Aggiungere dipendenze e test solo quando necessari per il comportamento richiesto e secondo le convenzioni già presenti nel progetto.
