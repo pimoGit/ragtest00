@@ -21,7 +21,7 @@ Conservare metadati sufficienti per risalire al documento originale. Evitare di 
 
 ## Modello di embedding scelto
 
-Per questo progetto usare il modello esterno `gemini-embedding-001` tramite Gemini API. Per il recupero, codificare i documenti con `RETRIEVAL_DOCUMENT` e le query con `RETRIEVAL_QUERY`. Le chiamate API richiedono una chiave; non inserirla nel codice o nel repository. Il tier gratuito può usare i contenuti inviati per migliorare i prodotti Google: durante gli esperimenti usare solo documenti non sensibili.
+Per questo progetto usare il modello esterno `gemini-embedding-001` tramite Gemini API. Per il recupero, codificare i documenti con `RETRIEVAL_DOCUMENT` e le query con `RETRIEVAL_QUERY`. Installare le dipendenze da `requirements.txt`, copiare `.env.example` in `.env` e ottenere il client tramite `config.get_genai_client()`. Le chiamate API richiedono una chiave: non inserirla nel codice o nel repository e non versionare `.env`. Il tier gratuito può usare i contenuti inviati per migliorare i prodotti Google: durante gli esperimenti usare solo documenti non sensibili.
 
 ## Approccio didattico e vincoli
 
