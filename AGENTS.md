@@ -20,3 +20,4 @@ Per ora non va realizzata un'interfaccia frontend: l'interazione avviene diretta
 - Non assumere framework, provider di embedding o database vettoriale senza una richiesta o una decisione esplicita.
 - Mantenere il progetto Python-first e senza frontend finché il contesto non cambia.
 - Consultare la skill `.agents/skills/rag-fundamentals/SKILL.md` per le linee guida verticali sul RAG.
+- Quando sono possibili più approcci con conseguenze rilevanti, chiedere prima una scelta e indicare come preferibile l'opzione più semplice, pulita e coerente con il progetto.

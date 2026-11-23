@@ -35,6 +35,10 @@ Quando si implementa l'indicizzazione nel database vettoriale, ogni documento de
 
 Per questo progetto usare il modello esterno `gemini-embedding-001` tramite Gemini API. Per il recupero, codificare i documenti con `RETRIEVAL_DOCUMENT` e le query con `RETRIEVAL_QUERY`. Installare le dipendenze da `requirements.txt`, copiare `.env.example` in `.env` e ottenere il client tramite `config.get_genai_client()`. Le chiamate API richiedono una chiave: non inserirla nel codice o nel repository e non versionare `.env`. Il tier gratuito può usare i contenuti inviati per migliorare i prodotti Google: durante gli esperimenti usare solo documenti non sensibili.
 
+## Database vettoriale
+
+Usare ChromaDB in modalità persistente locale. La configurazione è in `chroma_config.py`: `get_chroma_collection()` restituisce la collection `document_chunks` salvata nella cartella locale `chroma_db/`, esclusa dal controllo versione. Gli embedding sono generati da Gemini, quindi la collection non deve usare la funzione di embedding predefinita di Chroma.
+
 ## Approccio didattico e vincoli
 
 - Implementare soltanto il requisito del passo richiesto; non costruire in anticipo il flusso RAG completo.
