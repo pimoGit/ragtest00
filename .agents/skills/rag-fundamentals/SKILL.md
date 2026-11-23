@@ -12,12 +12,24 @@ Aiutare a realizzare, un passo alla volta, un'applicazione didattica per capire 
 ## Flusso di riferimento
 
 1. Individuare e leggere file testuali da una cartella.
-2. Dividere i documenti in unità di testo ricercabili (chunk), quando richiesto dal passo corrente.
+2. Dividere i documenti in unità di testo ricercabili (chunk) prima di indicizzarli nel database vettoriale.
 3. Trasformare i testi in embedding.
 4. Salvare embedding e metadati associati in un database vettoriale.
 5. Trasformare una query in embedding e recuperare i contenuti semanticamente più vicini.
 
 Conservare metadati sufficienti per risalire al documento originale. Evitare di confondere la similarità semantica con una ricerca per corrispondenza letterale.
+
+## Strategia di chunking
+
+Quando si implementa l'indicizzazione nel database vettoriale, ogni documento deve essere diviso in chunk ricercabili invece di creare un unico embedding per l'intero file.
+
+- Un chunk non è un singolo token: è una sequenza coerente di testo, in genere compresa tra circa 500 e 800 token.
+- Per chiarezza didattica usare per primi 500-800 caratteri con bordi preferibilmente cercati su paragrafi o frasi, senza introdurre una libreria di parsing nel primo incremento.
+- L'implementazione definitiva può contare i token con il tokenizer del provider o con una strategia compatibile; una separazione basata esclusivamente sui caratteri non va presentata come conteggio reale dei token.
+- Usare una sovrapposizione di circa 50-100 token per evitare di perdere il contesto vicino al bordo di un chunk.
+- Normalmente le dimensioni proposte sono un punto di partenza: devono essere validate in base alla lunghezza dei documenti e alle query reali.
+- Salvare per ogni chunk almeno il percorso del documento, il testo e l'indice/posizione del chunk; conservare anche gli indici dei caratteri quando permettono di individuare con precisione il frammento originale.
+- Non aggiungere chunking finché il passo corrente richiede soltanto la generazione e la stampa degli embedding: iniziare a crearli quando si aggiunge il database vettoriale.
 
 ## Modello di embedding scelto
 
