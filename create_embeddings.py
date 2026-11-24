@@ -1,6 +1,7 @@
 # Importa gli strumenti per gestire gli argomenti da riga di comando.
 import argparse
 # Importa Path per lavorare con i percorsi dei file.
+import hashlib
 from pathlib import Path
 
 # Importa i tipi di configurazione del client Google GenAI.
@@ -8,6 +9,7 @@ from google.genai import types
 
 # Importa la funzione di progetto che crea il client Gemini.
 from config import get_genai_client
+from chroma_config import get_chroma_collection
 
 # Imposta il modello di embedding scelto per il progetto.
 MODEL_NAME = "gemini-embedding-001"
@@ -65,6 +67,8 @@ def main() -> None:
 
     # Crea il client Gemini usando la configurazione del progetto.
     client = get_genai_client()
+    # Apre la collection persistente senza usare una funzione di embedding di Chroma.
+    collection = get_chroma_collection()
     # Genera un embedding per ciascun file letto.
     for input_path, text in input_texts:
         # Invia il testo al servizio di embedding del modello scelto.
@@ -91,12 +95,28 @@ def main() -> None:
             # Conclude la costruzione del messaggio di errore.
             )
 
+        # Usa un ID deterministico basato sul percorso così da poter ripetere il salvataggio.
+        document_id = hashlib.sha256(
+            str(input_path.resolve()).encode("utf-8")
+        ).hexdigest()
+        embedding = list(response.embeddings[0].values)
+
+        # Memorizza il testo originale, il vettore e il riferimento al file.
+        collection.upsert(
+            ids=[document_id],
+            embeddings=[embedding],
+            documents=[text],
+            metadatas=[{"source": str(input_path.resolve())}],
+        )
+
         # Stampa il percorso del file associato al risultato.
         print(f"File: {input_path}")
         # Stampa il testo originale passato al modello.
         print(f"Testo:\n{text}")
         # Stampa i valori numerici dell'embedding ricevuto.
-        print(f"Embedding:\n{response.embeddings[0].values}")
+        print(f"Embedding:\n{embedding}")
+        # Conferma che il documento è stato salvato nella collection persistente.
+        print("Stato: salvato nella collection document_chunks")
         # Stampa il separatore che distingue questo risultato dal successivo.
         print(SEPARATOR)
 
