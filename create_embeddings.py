@@ -1,7 +1,7 @@
 # Importa gli strumenti per gestire gli argomenti da riga di comando.
 import argparse
 # Importa Path per lavorare con i percorsi dei file.
-import hashlib
+import hashlib  # Serve a creare ID stabili a partire dal file e dall'indice del chunk.
 from pathlib import Path
 
 # Importa i tipi di configurazione del client Google GenAI.
@@ -9,12 +9,68 @@ from google.genai import types
 
 # Importa la funzione di progetto che crea il client Gemini.
 from config import get_genai_client
-from chroma_config import get_chroma_collection
+from chroma_config import get_chroma_collection  # Apre la collection persistente di Chroma.
 
 # Imposta il modello di embedding scelto per il progetto.
 MODEL_NAME = "gemini-embedding-001"
 # Definisce il separatore di 30 trattini tra i risultati.
 SEPARATOR = "-" * 30
+# --- INIZIO PARTE NUOVA: impostazioni e funzione per dividere i testi in chunk ---
+CHUNK_SIZE_CHARS = 700  # Limita ogni chunk a circa 700 caratteri.
+CHUNK_OVERLAP_CHARS = 100  # Ripete 100 caratteri tra chunk consecutivi per mantenere contesto.
+
+
+def split_text_into_chunks(
+    text: str,  # Riceve il testo completo da suddividere.
+    chunk_size: int = CHUNK_SIZE_CHARS,  # Accetta una dimensione massima personalizzabile.
+    overlap: int = CHUNK_OVERLAP_CHARS,  # Accetta una sovrapposizione personalizzabile.
+) -> list[tuple[int, int, str]]:  # Restituisce inizio, fine e contenuto di ogni chunk.
+    """Divide il testo per caratteri, preferendo paragrafi e frasi."""  # Chiarisce che non conta token.
+    if chunk_size <= 0 or overlap < 0 or overlap >= chunk_size:  # Controlla che i parametri siano validi.
+        raise ValueError(  # Interrompe l'elaborazione se la configurazione non è valida.
+            "chunk_size deve essere positivo e overlap tra 0 e chunk_size - 1"  # Specifica i vincoli richiesti.
+        )  # Conclude la costruzione dell'errore.
+
+    chunks: list[tuple[int, int, str]] = []  # Prepara i chunk con i rispettivi intervalli nel testo.
+    start = 0  # Inizia la scansione dal primo carattere.
+
+    while start < len(text):  # Continua finché rimane testo da elaborare.
+        end = min(start + chunk_size, len(text))  # Imposta il limite senza superare la fine del testo.
+        if end < len(text):  # Cerca un punto naturale solo se il chunk non è già l'ultimo.
+            minimum_end = start + chunk_size // 2  # Evita di creare chunk troppo corti.
+            boundaries = [  # Cerca separatori naturali nella parte finale del chunk.
+                (text.rfind("\n\n", minimum_end, end), 2),  # Preferisce una separazione tra paragrafi.
+                (text.rfind(". ", minimum_end, end), 2),  # Cerca la fine di una frase.
+                (text.rfind("? ", minimum_end, end), 2),  # Riconosce anche le domande.
+                (text.rfind("! ", minimum_end, end), 2),  # Riconosce anche le esclamazioni.
+            ]  # Conclude l'elenco dei separatori possibili.
+            boundary, boundary_length = max(boundaries)  # Sceglie il separatore più vicino al limite.
+            if boundary >= minimum_end:  # Usa il separatore se non rende il chunk troppo corto.
+                end = boundary + boundary_length  # Include nel chunk il separatore trovato.
+            else:  # Se manca un separatore di frase o paragrafo, cerca uno spazio.
+                boundary = text.rfind(" ", minimum_end, end)  # Cerca l'ultimo spazio prima del limite.
+                if boundary >= minimum_end:  # Usa lo spazio solo se resta un chunk sufficientemente lungo.
+                    end = boundary  # Evita di spezzare una parola quando possibile.
+
+        raw_chunk = text[start:end]  # Estrae il segmento corrispondente agli indici calcolati.
+        chunk = raw_chunk.strip()  # Rimuove gli spazi vuoti all'inizio e alla fine del segmento.
+        if chunk:  # Ignora eventuali segmenti composti soltanto da spazi.
+            chunk_start = start + len(raw_chunk) - len(raw_chunk.lstrip())  # Corregge l'inizio dopo la pulizia.
+            chunk_end = chunk_start + len(chunk)  # Calcola l'indice finale esclusivo del contenuto.
+            chunks.append((chunk_start, chunk_end, chunk))  # Conserva testo e posizione nel documento.
+
+        if end == len(text):  # Controlla se è stato raggiunto l'ultimo carattere.
+            break  # Termina senza tentare di creare un altro chunk.
+
+        next_start = max(start + 1, end - overlap)  # Riporta l'inizio indietro per sovrapporre i chunk.
+        while next_start < end and not text[next_start].isspace():  # Evita di iniziare nel mezzo di una parola.
+            next_start += 1  # Avanza fino al successivo spazio disponibile.
+        while next_start < len(text) and text[next_start].isspace():  # Salta spazi e ritorni a capo.
+            next_start += 1  # Posiziona il nuovo chunk sul primo carattere utile.
+        start = next_start  # Riprende la scansione dal punto scelto.
+
+    return chunks  # Restituisce i chunk pronti per essere trasformati in embedding.
+# --- FINE PARTE NUOVA: impostazioni e funzione per dividere i testi in chunk ---
 
 
 # Definisce il punto di ingresso principale dello script.
@@ -22,7 +78,9 @@ def main() -> None:
     # Crea il parser che legge e descrive gli argomenti del comando.
     parser = argparse.ArgumentParser(
         # Spiega brevemente lo scopo dello script nella guida CLI.
-        description="Crea e stampa un embedding per ogni file di testo indicato."
+        # --- INIZIO MODIFICA: aggiorna la descrizione per indicare il chunking ---
+        description="Crea e salva embedding per i chunk dei file di testo indicati."
+        # --- FINE MODIFICA: descrizione aggiornata ---
     # Conclude la configurazione iniziale del parser.
     )
     # Aggiunge l'argomento obbligatorio per i file da elaborare.
@@ -69,56 +127,59 @@ def main() -> None:
     client = get_genai_client()
     # Apre la collection persistente senza usare una funzione di embedding di Chroma.
     collection = get_chroma_collection()
-    # Genera un embedding per ciascun file letto.
-    for input_path, text in input_texts:
-        # Invia il testo al servizio di embedding del modello scelto.
-        response = client.models.embed_content(
-            # Specifica il modello di embedding da utilizzare.
-            model=MODEL_NAME,
-            # Fornisce al modello il testo letto dal file.
-            contents=text,
-            # Configura l'embedding per un documento destinato al recupero.
-            config=types.EmbedContentConfig(
-                # Ottimizza il vettore per la ricerca di documenti.
-                task_type="RETRIEVAL_DOCUMENT",
-                # Limita il vettore restituito a 768 dimensioni.
-                output_dimensionality=768,
-            ),
-        # Conclude la richiesta di creazione dell'embedding.
-        )
-        # Verifica che la risposta contenga un vettore non vuoto.
-        if not response.embeddings or not response.embeddings[0].values:
-            # Segnala esplicitamente che il modello non ha fornito il vettore.
-            raise RuntimeError(
-                # Include il percorso del file che ha causato il problema.
-                f"il modello non ha restituito un embedding per {input_path}"
-            # Conclude la costruzione del messaggio di errore.
-            )
+    # --- INIZIO PARTE NUOVA: genera e salva un embedding per ogni chunk ---
+    for input_path, text in input_texts:  # Elabora ogni file che l'utente ha passato allo script.
+        source = str(input_path.resolve())  # Usa il percorso assoluto come riferimento stabile al file.
+        chunks = split_text_into_chunks(text)  # Suddivide il contenuto usando i limiti impostati sopra.
+        chunk_ids: list[str] = []  # Raccoglie gli ID stabili da assegnare ai chunk.
+        embeddings: list[list[float]] = []  # Raccoglie i vettori restituiti da Gemini.
+        documents: list[str] = []  # Raccoglie i testi originali da salvare con i vettori.
+        metadatas: list[dict[str, str | int]] = []  # Raccoglie la fonte e la posizione di ciascun chunk.
 
-        # Usa un ID deterministico basato sul percorso così da poter ripetere il salvataggio.
-        document_id = hashlib.sha256(
-            str(input_path.resolve()).encode("utf-8")
-        ).hexdigest()
-        embedding = list(response.embeddings[0].values)
+        for chunk_index, (start, end, chunk) in enumerate(chunks):  # Elabora ogni chunk con il suo indice.
+            response = client.models.embed_content(  # Richiede a Gemini l'embedding del chunk corrente.
+                model=MODEL_NAME,  # Seleziona il modello di embedding configurato per il progetto.
+                contents=chunk,  # Invia al modello solo il testo di questo chunk.
+                config=types.EmbedContentConfig(  # Imposta il tipo di embedding da generare.
+                    task_type="RETRIEVAL_DOCUMENT",  # Ottimizza il vettore per il recupero di documenti.
+                    output_dimensionality=768,  # Richiede vettori compatibili con la collection.
+                ),  # Conclude la configurazione della richiesta.
+            )  # Conclude la chiamata al servizio Gemini.
+            if not response.embeddings or not response.embeddings[0].values:  # Verifica che il vettore esista.
+                raise RuntimeError(  # Segnala il problema invece di salvare un record incompleto.
+                    f"il modello non ha restituito un embedding per "  # Introduce il contesto dell'errore.
+                    f"{input_path}, chunk {chunk_index}"  # Identifica il file e il chunk interessati.
+                )  # Conclude la costruzione dell'errore.
 
-        # Memorizza il testo originale, il vettore e il riferimento al file.
-        collection.upsert(
-            ids=[document_id],
-            embeddings=[embedding],
-            documents=[text],
-            metadatas=[{"source": str(input_path.resolve())}],
-        )
+            chunk_id = hashlib.sha256(  # Crea un ID stabile per questo file e questa posizione.
+                f"{source}:{chunk_index}".encode("utf-8")  # Converte il riferimento in byte per l'hash.
+            ).hexdigest()  # Ottiene una stringa utilizzabile come ID in Chroma.
+            chunk_ids.append(chunk_id)  # Aggiunge l'ID alla lista destinata a Chroma.
+            embeddings.append(list(response.embeddings[0].values))  # Conserva il vettore numerico.
+            documents.append(chunk)  # Conserva il testo associato al vettore.
+            metadatas.append(  # Aggiunge i dati necessari per ritrovare il pezzo nel file.
+                {  # Inizia i metadati associati a questo chunk.
+                    "source": source,  # Salva il percorso del documento originale.
+                    "chunk_index": chunk_index,  # Salva la posizione progressiva del chunk.
+                    "char_start": start,  # Salva l'indice del primo carattere nel documento.
+                    "char_end": end,  # Salva l'indice esclusivo dopo l'ultimo carattere.
+                }  # Conclude i metadati di questo chunk.
+            )  # Conclude l'aggiunta dei metadati alla lista.
 
-        # Stampa il percorso del file associato al risultato.
-        print(f"File: {input_path}")
-        # Stampa il testo originale passato al modello.
-        print(f"Testo:\n{text}")
-        # Stampa i valori numerici dell'embedding ricevuto.
-        print(f"Embedding:\n{embedding}")
-        # Conferma che il documento è stato salvato nella collection persistente.
-        print("Stato: salvato nella collection document_chunks")
-        # Stampa il separatore che distingue questo risultato dal successivo.
-        print(SEPARATOR)
+            print(f"File: {input_path} - chunk {chunk_index + 1}/{len(chunks)}")  # Mostra l'avanzamento.
+            print(f"Testo:\n{chunk}")  # Mostra il contenuto effettivamente trasformato.
+            print(f"Dimensione embedding: {len(response.embeddings[0].values)}")  # Mostra la dimensione.
+            print(SEPARATOR)  # Separa l'output del chunk dal successivo.
+
+        collection.delete(where={"source": source})  # Rimuove eventuali chunk precedenti dello stesso file.
+        collection.upsert(  # Inserisce i chunk nuovi o aggiorna quelli con lo stesso ID.
+            ids=chunk_ids,  # Associa ogni vettore al suo ID stabile.
+            embeddings=embeddings,  # Salva tutti gli embedding generati per il file.
+            documents=documents,  # Salva i testi originali dei chunk.
+            metadatas=metadatas,  # Salva fonte e posizione di ogni chunk.
+        )  # Conclude l'operazione di persistenza in Chroma.
+        print(f"Salvati {len(chunks)} chunk nella collection document_chunks")  # Conferma il numero salvato.
+    # --- FINE PARTE NUOVA: genera e salva un embedding per ogni chunk ---
 
 
 # Esegue main solo quando questo file viene avviato direttamente.
