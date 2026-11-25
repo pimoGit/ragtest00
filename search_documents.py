@@ -4,7 +4,7 @@ from chroma_config import get_chroma_collection
 from config import get_genai_client
 
 MODEL_NAME = "gemini-embedding-001"
-query = "Come posso far durare di più la mia tavola?"
+query = "Come migliorare nel tempo?"
 
 
 def main() -> None:
@@ -27,7 +27,8 @@ def main() -> None:
 
     results = collection.query(
         query_embeddings=[list(response.embeddings[0].values)],
-        n_results=min(3, collection_size),
+        # n_results=min(3, collection_size),
+        n_results=1,
         include=["documents", "metadatas", "distances"],
     )
 
