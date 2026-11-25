@@ -1,6 +1,6 @@
 import unittest  # Importa il framework di test incluso nella libreria standard di Python.
 
-from create_embeddings import split_text_into_chunks  # Importa la funzione da verificare.
+from text_chunking import split_text_into_chunks  # Importa la funzione da verificare.
 
 
 class SplitTextIntoChunksTests(unittest.TestCase):  # Raggruppa i test della funzione di chunking.
